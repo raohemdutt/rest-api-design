@@ -12,9 +12,9 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 from matplotlib.patches import FancyArrowPatch, Rectangle
 
-W, H = 7.5, 11.0
+W, H = 7.5, 8.7
 CX, SX = 1.35, 6.15  # x position of the client and server lifelines
-STEP = 1.45  # vertical space for one request/response round trip
+STEP = 1.12  # vertical space for one request/response round trip
 
 fig = plt.figure(figsize=(W, H))
 ax = fig.add_axes([0, 0, 1, 1])
@@ -31,14 +31,14 @@ def arrow(y, x0, x1, dashed=False):
 
 def trip(y, n, title, req, resp):
     """One round trip: solid request arrow to the server, dashed response back."""
-    ax.add_patch(Rectangle((CX - 0.07, y - 1.0), 0.14, 1.0, fc="white", ec="black", lw=1))
-    ax.add_patch(Rectangle((SX - 0.07, y - 0.75), 0.14, 0.55, fc="white", ec="black", lw=1))
+    ax.add_patch(Rectangle((CX - 0.07, y - 0.78), 0.14, 0.78, fc="white", ec="black", lw=1))
+    ax.add_patch(Rectangle((SX - 0.07, y - 0.56), 0.14, 0.36, fc="white", ec="black", lw=1))
     arrow(y - 0.2, CX + 0.07, SX - 0.07)
-    arrow(y - 0.75, SX - 0.07, CX + 0.07, dashed=True)
+    arrow(y - 0.56, SX - 0.07, CX + 0.07, dashed=True)
     mid = (CX + SX) / 2
     ax.text(mid, y - 0.05, f"{n}. {title}", ha="center", va="bottom", fontsize=9.5, fontweight="bold")
-    ax.text(mid, y - 0.28, req, ha="center", va="top", fontsize=8, linespacing=1.25)
-    ax.text(mid, y - 0.83, resp, ha="center", va="top", fontsize=8, linespacing=1.25)
+    ax.text(mid, y - 0.25, req, ha="center", va="top", fontsize=8.5, linespacing=1.25)
+    ax.text(mid, y - 0.61, resp, ha="center", va="top", fontsize=8.5, linespacing=1.25)
 
 
 def frame_top(y, kind, condition):
@@ -49,12 +49,15 @@ def frame_top(y, kind, condition):
     ax.text(CX + 0.25, y - 0.135, condition, ha="left", va="center", fontsize=8.5, style="italic")
 
 
-top = H - 0.35
+top = H - 0.3
 for x, label in ((CX, "Customer's Device\n(Client)"), (SX, "Movie Theater\nServer")):
     ax.add_patch(Rectangle((x - 0.8, top - 0.6), 1.6, 0.6, fc="#e8eef7", ec="black", lw=1.2))
     ax.text(x, top - 0.3, label, ha="center", va="center", fontsize=9.5, fontweight="bold")
 
-y = top - 0.95
+ax.text((CX + SX) / 2, top - 0.3, "Every request carries the customer's\nauth token (Authorization header)",
+        ha="center", va="center", fontsize=8, style="italic")
+
+y = top - 0.9
 trip(y, 1, "GET /showtimes  (find movie times)",
      "Request: movieId, date, zip code (or theaterId)",
      "Response: 200 OK, list of showtimes (showtimeId, time,\nauditorium, format, seats left)")
@@ -69,9 +72,9 @@ trip(y, 3, "POST /reservations  (select seats and hold them)",
 y -= STEP
 
 # alt frame: the customer either pays (steps 4 and 5) or cancels (step 6)
-frame_y0 = y + 0.05
+frame_y0 = y + 0.12
 frame_top(frame_y0, "alt", "[customer pays within the 10 minute hold]")
-y = frame_y0 - 0.42
+y = frame_y0 - 0.4
 trip(y, 4, "POST /payments  (pay for the tickets)",
      "Request: reservationId, card token, billing zip code",
      "Response: 200 OK, paymentId, status (approved),\namount charged. 402 if the card is declined")
@@ -81,19 +84,19 @@ trip(y, 5, "GET /reservations/{reservationId}/tickets  (get e-ticket)",
      "Response: 200 OK, confirmationCode, QR code, movie,\nshowtime, auditorium, seats")
 y -= STEP
 
-divider = y + 0.1
+divider = y + 0.14
 ax.plot([0.25, W - 0.25], [divider, divider], color="#555", lw=1.1, ls=(0, (6, 3)))
-ax.text(CX + 0.25, divider - 0.15, "[else customer cancels or changes their mind]",
+ax.text(CX + 0.25, divider - 0.14, "[else customer cancels or changes their mind]",
         ha="left", va="center", fontsize=8.5, style="italic")
-y = divider - 0.42
+y = divider - 0.4
 trip(y, 6, "DELETE /reservations/{reservationId}  (release the hold)",
      "Request: reservationId",
      "Response: 204 No Content (seats released).\n404 if unknown, 410 if the hold already expired")
-frame_y1 = y - 1.35
+frame_y1 = y - 1.0
 ax.add_patch(Rectangle((0.25, frame_y1), W - 0.5, frame_y0 - frame_y1, fc="none", ec="#555", lw=1.1))
 
 for x in (CX, SX):
-    ax.plot([x, x], [top - 0.6, frame_y1 - 0.15], color="black", lw=1, ls=(0, (6, 4)), zorder=0)
+    ax.plot([x, x], [top - 0.6, frame_y1 - 0.12], color="black", lw=1, ls=(0, (6, 4)), zorder=0)
 
 out = Path(__file__).with_name("sequence-diagram.png")
 fig.savefig(out, dpi=220)
