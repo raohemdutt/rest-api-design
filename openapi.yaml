@@ -1,0 +1,261 @@
+openapi: 3.0.3
+info:
+  title: Movie Theater Seat Reservation API
+  version: 1.0.0
+  description: |
+    This API lets a customer's device reserve seats for a movie showing at a
+    movie theater. It covers the "pick a seat" step of buying tickets online:
+    the client looks up which seats are open for a showing, places a temporary
+    hold on the seats it wants, and can release that hold if the customer
+    changes their mind or leaves before paying.
+
+    A hold lasts 10 minutes. If the customer does not pay within that time,
+    the seats are released automatically and the reservation can no longer be
+    used. Payment and ticket delivery are separate services and are not part
+    of this specification.
+  contact:
+    name: Hemdutt Rao
+    email: raohemdutt@ufl.edu
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+servers:
+  - url: https://api.example-theater.com/v1
+    description: Example production server (design only, not a real service)
+security:
+  - bearerAuth: []
+tags:
+  - name: Seats
+    description: Seat availability for a showing
+  - name: Reservations
+    description: Temporary holds on seats
+paths:
+  /showtimes/{showtimeId}/seats:
+    get:
+      tags: [Seats]
+      summary: Get the seat map for a showing
+      description: |
+        Returns every seat in the auditorium for one showing, along with
+        whether each seat is available or already taken. Use the optional
+        `status` filter to return only the seats in one state.
+      operationId: getSeatsForShowtime
+      parameters:
+        - name: showtimeId
+          in: path
+          required: true
+          description: Unique ID of the showing, as returned by the showtimes search.
+          schema:
+            type: string
+          example: st_20261030_1930_a3
+        - name: status
+          in: query
+          required: false
+          description: Only return seats with this status.
+          schema:
+            type: string
+            enum: [available, held, sold]
+      responses:
+        '200':
+          description: The seat map for the showing.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  showtimeId:
+                    type: string
+                    example: st_20261030_1930_a3
+                  seats:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Seat'
+        '400':
+          description: The `status` value is not one of available, held or sold.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: No showing exists with that ID.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /reservations:
+    post:
+      tags: [Reservations]
+      summary: Hold seats for a showing
+      description: |
+        Places a 10 minute hold on one or more seats so no one else can buy
+        them while the customer pays. All seats are held together: if any one
+        of them is taken, none are held.
+      operationId: createReservation
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReservationRequest'
+            example:
+              showtimeId: st_20261030_1930_a3
+              seatIds: [F7, F8]
+              customerEmail: customer@example.com
+      responses:
+        '201':
+          description: The seats are held. Pay before `expiresAt` to keep them.
+          headers:
+            Location:
+              description: URL of the new reservation.
+              schema:
+                type: string
+                example: /v1/reservations/res_9f2c41
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Reservation'
+        '400':
+          description: The request body is missing a field or has an invalid one.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: The showing or one of the seats does not exist.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: At least one of the seats is already held or sold.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /reservations/{reservationId}:
+    delete:
+      tags: [Reservations]
+      summary: Release a seat hold
+      description: |
+        Cancels a reservation and makes its seats available to other
+        customers right away. A reservation that has already been paid for
+        cannot be deleted here; it has to be refunded through the payment
+        service.
+      operationId: deleteReservation
+      parameters:
+        - name: reservationId
+          in: path
+          required: true
+          description: ID returned when the reservation was created.
+          schema:
+            type: string
+          example: res_9f2c41
+      responses:
+        '204':
+          description: The hold was released. There is no response body.
+        '404':
+          description: No reservation exists with that ID.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: The reservation is already paid for and cannot be released here.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '410':
+          description: The hold already expired and its seats were released.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      description: Token issued when the customer signs in to the theater app.
+  schemas:
+    Seat:
+      type: object
+      required: [seatId, row, number, status, price]
+      properties:
+        seatId:
+          type: string
+          example: F7
+        row:
+          type: string
+          example: F
+        number:
+          type: integer
+          example: 7
+        type:
+          type: string
+          enum: [standard, accessible, premium]
+          example: standard
+        status:
+          type: string
+          enum: [available, held, sold]
+          example: available
+        price:
+          type: number
+          format: float
+          description: Ticket price in US dollars.
+          example: 12.5
+    ReservationRequest:
+      type: object
+      required: [showtimeId, seatIds]
+      properties:
+        showtimeId:
+          type: string
+          example: st_20261030_1930_a3
+        seatIds:
+          type: array
+          minItems: 1
+          maxItems: 8
+          items:
+            type: string
+          example: [F7, F8]
+        customerEmail:
+          type: string
+          format: email
+          description: Where to send the e-ticket after payment.
+    Reservation:
+      type: object
+      required: [reservationId, showtimeId, seatIds, status, total, expiresAt]
+      properties:
+        reservationId:
+          type: string
+          example: res_9f2c41
+        showtimeId:
+          type: string
+          example: st_20261030_1930_a3
+        seatIds:
+          type: array
+          items:
+            type: string
+          example: [F7, F8]
+        status:
+          type: string
+          enum: [held, paid, expired]
+          example: held
+        total:
+          type: number
+          format: float
+          description: Total price in US dollars.
+          example: 25.0
+        expiresAt:
+          type: string
+          format: date-time
+          example: '2026-10-30T19:10:00Z'
+    Error:
+      type: object
+      required: [code, message]
+      properties:
+        code:
+          type: string
+          example: SEAT_UNAVAILABLE
+        message:
+          type: string
+          example: Seat F8 is already held by another customer.
